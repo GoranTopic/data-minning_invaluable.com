@@ -29,7 +29,6 @@ router.addHandler('detail', async ({ request, page, log }) => {
     const title = await page.title();
     log.info(`${title}`, { url: request.loadedUrl });
     //log.info(page.$('h4:contains("Description")'));
-
     await Dataset.pushData({
         url: request.loadedUrl,
         title,
@@ -37,26 +36,3 @@ router.addHandler('detail', async ({ request, page, log }) => {
 });
 
 
-// add router to intercept the request and change the hitsPerPage
-const inpterceptedAndReplaceRequest = async (route, request) => {
-    // Make the original request
-    // for some fetch requests does not work with the cloudflare firewall
-    let url = request.url();
-    //console.log('url', url);
-    let method = request.method();
-    //console.log('method', method);
-    let headers = request.headers();
-    //console.log('headers', headers);
-    let postData = request.postData();
-    postData = JSON.parse(postData);
-    //console.log('post data:', postData);
-    let params = postData.requests[0].params
-    //params = params.replace(/&hitsPerPage=96/g, '&hitsPerPage=136000');
-    console.log('params', params);
-    postData.requests[0].params = params;
-    // make the request
-    // const response = await route.fetch({ url, method, headers, postData });
-    // console.log('response', response)
-    // await route.fulfill({ response });
-    await route.continue({ url, method, headers, postData });
-}
