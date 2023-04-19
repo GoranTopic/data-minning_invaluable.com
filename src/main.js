@@ -139,24 +139,6 @@ let date_to_url = date => encodeUrl(
 })
 
 
-/*
-const page = await browser.newPage();
-// set the headers
-await setHeaders(page);
-// set the router
-await setRouter(page);
-// set the listener
-await setListener(page);
-//  go to the url
-await page.goto(
-    'https://www.invaluable.com/search?Furniture=Rugs%2520%2526%2520Carpets&dateTimeUTCUnix%5Bmin%5D=1679900400&dateTimeUTCUnix%5Bmax%5D=1681714800&dateType=Custom&upcoming=false&query=rugs&keyword=rugs'
-);
-// wait until the page is loaded    
-await page.waitForLoadState('load');
-// clikc the load more button
-await clickLoadMoreHits(page);
-*/
-
 let current_time = parseInt(Date.now() / 1000);
 let start =  1601670000;
 let date_range = 100000; // about  half a day
