@@ -1,9 +1,10 @@
-import { write_json, file_exists } from "files-js";
+import { write_json, file_exists, mkdir } from "files-js";
 import { chromium } from 'playwright-extra';
 import { encodeUrl } from './utils/encoders.js';
 import Checklist from 'checklist-js'
 import prompt_sync from 'prompt-sync';
 import extra_stealth from 'puppeteer-extra-plugin-stealth'
+import fs from 'fs';
 // create a prompt
 let prompt = prompt_sync();
 // add stealth plugin and use defaults (all evasion techniques)
@@ -11,12 +12,21 @@ chromium.use(extra_stealth())
 
 // domain
 let domain = 'https://www.invaluable.com';
-
-let current_hits = 0;
-let total_hits = 0;
 // exmaple url
 // 'https://www.invaluable.com/search?dateTimeUTCUnix%5Bmin%5D=1366732800&dateTimeUTCUnix%5Bmax%5D=1641024000&dateType=Custom&upcoming=false&query=%28rugs%2520carpets%29&keyword=%28rugs%2520carpets%29'
 
+let current_hits = 0;
+let total_hits = 0;
+
+// get all lines
+const filename = fs.readFileSync('./storage/search_keys.txt', 'utf-8');
+// read the keywords line by line from the text file
+const keywords = filename.split(/\r?\n/);
+// keywords
+let keyword = '';
+
+
+// browser
 const browser = await chromium.launch({
     headless: false,
     // open devtools
@@ -24,8 +34,7 @@ const browser = await chromium.launch({
 });
 
 
-//let checkLoadedHits = async page =>
-
+// set the headers
 let setHeaders = async page =>
     await page.setExtraHTTPHeaders({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
@@ -107,9 +116,9 @@ let setListener = async page =>
                 // get the total hits
                 total_hits = res.nbHits;
                 // make posible filename
-                let filename = `./storage/responces/data-${res.queryID}.json`;
+                let filename = `./storage/responces/data-${keyword}-${res.queryID}.json`;
                 if( file_exists(filename) )
-                    filename = `./storage/responces/data-${res.queryID}-${Date.now()}.json`;
+                    filename = `./storage/responces/data-${keyword}-${res.queryID}-${Date.now()}.json`;
                 // write the json file
                 write_json(res, filename);
                 // log the message
@@ -128,36 +137,47 @@ let setRouter = async page =>
         inpterceptedAndReplaceRequest
     );
 
-let date_to_url = date => encodeUrl(
-    domain, {
-    'dateTimeUTCUnix%5Bmin%5D': `${date.start}`,
-    'dateTimeUTCUnix%5Bmax%5D': `${date.end}`,
-    dateType: 'Custom',
-    upcoming: 'false',
-    query: 'rugs%20carpets',
-    keyword: 'rugs%20carpets'
-})
+let make_url = ({date, query, keyword}) => { 
+    let params = {};
+    params['upcoming'] = 'false';
+    if(query)
+        params['query'] = query.replace(/ /g, '%20');
+    if(keyword)
+        params['keyword'] = keyword.replace(/ /g, '%20');
+    if(date){
+        params['dateType'] = 'Custom';
+        params['dateTimeUTCUnix%5Bmin%5D'] = `${date.start}`;
+        params['dateTimeUTCUnix%5Bmax%5D'] = `${date.end}`;
+    }
+    // encode the url
+    return encodeUrl( domain, params );
+}
 
-
+/*
 let current_time = parseInt(Date.now() / 1000);
 let start =  1601670000;
 let date_range = 100000; // about  half a day
 let dates = [];
-
+// make a list of dates
 while( current_time > start ){
     start = start + date_range;
     dates.push( { start, end: start + date_range } )
 }
-
 // make a checklist
 let dates_checklist = new Checklist(dates);
-
 // get the next date
 let date = dates_checklist.next();
+*/
 
-while (date) {
+// make a checklist
+let keys_checklist = new Checklist( keywords );
+// get the next date
+keyword = keys_checklist.next();
+
+// loop over the dates
+while (keyword) {
     // encode paramters
-    let url = date_to_url(date);
+    let url = make_url({query: keyword, keyword});
     // go to url
     console.log('url', url);
     // Open a new page / tab in the browser.
@@ -169,20 +189,20 @@ while (date) {
     // set the listener
     await setListener(page);
     //  go to the url
-    await page.goto(url);
+    await page.goto(url, {timeout: 100000});
     // wait for 10 seconds
     await page.waitForTimeout(1000);
     // wait until the page is loaded    
-    await page.waitForLoadState('load');
+    await page.waitForLoadState('load', {timeout: 1000});
     // check if the date is correct
     if (current_hits < total_hits)
         await clickLoadMoreHits(page);
-    dates_checklist.check(date);
+    keys_checklist.check(keyword);
     // close the page
     await page.close();
-    // get the next date
-    date = dates_checklist.next();
+    // get the next key
+    keyword = keys_checklist.next();
 }
-
 // close the browser    
 await browser.close();
+
