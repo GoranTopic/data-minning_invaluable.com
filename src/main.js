@@ -28,7 +28,7 @@ let keyword = '';
 
 // browser
 const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     // open devtools
     devtools: false,
 });
@@ -74,20 +74,25 @@ const inpterceptedAndReplaceRequest = async (route, request) => {
 const clickLoadMoreHits = async page => {
     // loop over clicking the load more button
     // wait until the page is loaded    
-    await page.waitForLoadState('load', { timeout: 100000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 100000 });
     // get the loaded hits
     let hits = await page.locator("//div[@class='hit-holder']").count();
     console.log(`starting clicking button with ${hits} hits out of ${total_hits}`);
     // loop over clicking the load more button
-    while (hits < total_hits) {
-        // loop over clicking the load more button
-        let button = await page.getByText('Load more', { timeout: 100000 });
+    let button = await page.getByText('Load more', { timeout: 1000 * 5 });
+    //await expect(page.locator("text=modal title")).toBeVisible()
+    // while the hits are less than the total hits and the button is visible
+    while (hits < total_hits && await button.isVisible()) {
         try {
+            // loop over clicking the load more button
+            console.log('getting the button');
+            button = await page.getByText('Load more', { timeout: 1000 * 5 });
+            console.log('is button visible: ', await button.isVisible());
             // click the button
             console.log('clicking the button');
             await button.click();
             // wait for 10 seconds
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(1000 * 10);
             // wait until the page is loaded
             await page.waitForLoadState('load');
         } catch (e) {
@@ -95,7 +100,7 @@ const clickLoadMoreHits = async page => {
         }
         // get the loaded hits
         hits = await page.locator("//div[@class='hit-holder']").count();
-        console.log(`got ${hits} hits out of ${total_hits} when clicking loading button`);
+        console.log(`loaded ${hits} hits out of ${total_hits} when clicking loading button`);
     }
 }
 
@@ -130,12 +135,20 @@ let setListener = async page =>
     });
 
 // get the hits from the page
-let setRouter = async page =>
+let setRouters = async page => {
+    // add route to stop from loading images
+    await page.route('**/*', (route) => {
+        return route.request().resourceType() === 'image'
+            ? route.abort()
+            : route.continue()
+    });
     // add router to intercept the request and change the hitsPerPage
     await page.route(
         'https://algolia.invaluable.com/1/indexes/**',
         inpterceptedAndReplaceRequest
     );
+}
+
 
 let make_url = ({date, query, keyword}) => { 
     let params = {};
@@ -153,7 +166,7 @@ let make_url = ({date, query, keyword}) => {
     return encodeUrl( domain, params );
 }
 
-/*
+/* // search by time stamp
 let current_time = parseInt(Date.now() / 1000);
 let start =  1601670000;
 let date_range = 100000; // about  half a day
@@ -171,37 +184,66 @@ let date = dates_checklist.next();
 
 // make a checklist
 let keys_checklist = new Checklist( keywords );
+keys_checklist.log();
 // get the next date
 keyword = keys_checklist.next();
 
 // loop over the dates
 while (keyword) {
-    // encode paramters
-    let url = make_url({query: keyword, keyword});
-    // go to url
-    console.log('url', url);
-    // Open a new page / tab in the browser.
-    const page = await browser.newPage();
-    // set the headers
-    await setHeaders(page);
-    // set the router
-    await setRouter(page);
-    // set the listener
-    await setListener(page);
-    //  go to the url
-    await page.goto(url, {timeout: 100000});
-    // wait for 10 seconds
-    await page.waitForTimeout(1000);
-    // wait until the page is loaded    
-    await page.waitForLoadState('load', {timeout: 1000});
-    // check if the date is correct
-    if (current_hits < total_hits)
-        await clickLoadMoreHits(page);
-    keys_checklist.check(keyword);
-    // close the page
-    await page.close();
-    // get the next key
-    keyword = keys_checklist.next();
+    try {
+        // encode paramters
+        let url = make_url({query: keyword, keyword});
+        // go to url
+        console.log('going to: ', url);
+        // Open a new page / tab in the browser.
+        const page = await browser.newPage();
+        // set the headers
+        await setHeaders(page);
+        // set the router
+        await setRouters(page);
+        // set the listener
+        await setListener(page);
+        //  go to the url
+        console.log('going to url');
+        await page.goto(url, {
+            // wait for 15 minutes
+            timeout: 1000 * 60 * 15,
+            // wait until the page is loaded
+            waitUntil: 'domcontentloaded',
+        });
+        // wait for 10 seconds
+        console.log('waiting for 10 seconds');
+        await page.waitForTimeout(1000 * 10);
+        // wait until the page is loaded    
+        console.log('waiting for load state');
+        await page.waitForLoadState('domcontentloaded', { timeout: 1000 * 60 * 15 });
+        console.log(`got ${current_hits} hits out of ${total_hits}`);
+        // get the number loaded hits
+        if(total_hits >= 15000) {
+            console.log('total hits is more than 15k');
+            // check as having too many hits
+            keys_checklist.check(keyword, "too many hits");
+            // close the page
+            await page.close();
+            // get the next key
+            keyword = keys_checklist.next();
+            // continue
+            continue;
+        }
+        // check if the date is correct
+        if (current_hits < total_hits){
+            console.log('current hits is less than total hits, loading more');
+            await clickLoadMoreHits(page);
+        } else
+            console.log('got all total hits');
+        keys_checklist.check(keyword);
+        // close the page
+        await page.close();
+        // get the next key
+        keyword = keys_checklist.next();
+    } catch (e) {
+        console.log('error', e)
+    }
 }
 // close the browser    
 await browser.close();
