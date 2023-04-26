@@ -7,12 +7,14 @@ let path = './storage/responces/'
 // Get all files in the directory
 let files = ls_files(path);
 
+let hits = [];
+
 // let sepater all the response file by the tags
 // get tags from all files
 let tags = [ ...(new Set( files.map((file) => file.split('-')[1]) )) ]
 
 // for each tag make a file with all the hits
-let separeted_by_tags = tags.map( tag => {
+hits = tags.map( tag => {
     let tagHits = [];
     files.forEach((file, index) => {
         if (file.split('-')[1] == tag) {
@@ -29,7 +31,7 @@ let separeted_by_tags = tags.map( tag => {
 // we can remove all the repeated hits by only using the objectID
 
 /*
-let uniqueHits = separeted_by_tags.map( hits => {
+hits = hits.map( hits => {
     // make a set of all unique objectIds
     let uniqueIDs = new Set();
     let uniqueHits = [];
@@ -48,12 +50,25 @@ let uniqueHits = separeted_by_tags.map( hits => {
 })
 */
 
+// add in item url for each of the hits
+let baseDomain = 'https://www.invaluable.com/v2/auction-lot/';
+hits = hits.map( hits => ({
+    ...hits,
+    // for each hit, 
+    hits: hits.hits.map(hit => ({
+        ...hit,
+        // remove all non alphanumeric characters from the lotTitle value
+        // and replace all spaces with a dash
+        // and add the auctionId
+        // and preappend the baseDomain
+        url: baseDomain + hit.lotTitle.replace(/[^a-zA-Z0-9 ]/g, "").replace(/ /g, "-") + '-' + hit.lotRef + '/'
+    }))
+}));
+
 // now that we know that each hit is unique 
 // we must format the hits
-
-let formatedHits = separeted_by_tags.map( hits => {
+hits = hits.map( hits => {
     // for each hit, 
-    
     let formatedHits = hits.hits.map(hit => {
         hit = { ...hit,
             moreText: hit._highlightResult.moreText.value,
@@ -72,18 +87,10 @@ let formatedHits = separeted_by_tags.map( hits => {
     return { tag: hits.tag, hits: formatedHits }
 })
 
-//console.log(formatedHits)
 
-//console.log(formatedHits[0].hits[0])
-    
-// now we write to excel file
-for (let i = 0; i < formatedHits.length; i++) {
-    let xls = json2xls(formatedHits[i].hits);
-    console.log('saving: /storage/cleaned/' + formatedHits[i].tag + '.xlsx');
-    fs.writeFileSync('./storage/cleaned/' + formatedHits[i].tag + '.xlsx', xls, 'binary');
+// now we save to excel file
+for (let i = 0; i < hits.length; i++) {
+    let xls = json2xls(hits[i].hits);
+    console.log('saving: /storage/cleaned/' + hits[i].tag + '.xlsx');
+    fs.writeFileSync('./storage/cleaned/' + hits[i].tag + '.xlsx', xls, 'binary');
 }
-
-
-
-
-
