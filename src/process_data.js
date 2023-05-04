@@ -50,6 +50,7 @@ hits = hits.map( hits => {
 })
 */
 
+
 // add in item url for each of the hits
 let baseDomain = 'https://www.invaluable.com/v2/auction-lot/';
 hits = hits.map( hits => ({
@@ -87,6 +88,13 @@ hits = hits.map( hits => {
     return { tag: hits.tag, hits: formatedHits }
 })
 
+// let remove any that sold for 0 dollars
+hits = hits.map( hits => {
+    // for each hit, 
+    hits.hits = hits.hits.filter( hit => hit.priceResult > 0 );
+    // return and object with the tag and the hits
+    return hits;
+})
 
 // now we save to excel file
 for (let i = 0; i < hits.length; i++) {
